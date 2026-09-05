@@ -37,6 +37,9 @@ async function run() {
      const companyCollection=database.collection("companies");
      const usersCollection=database.collection("user");
      const applicationCollection=database.collection("applications");
+     const planCollection=database.collection('plans');
+     const subscriptionCollection=database.collection('subscriptions')
+
 
      app.get('/api/users', async(req,res)=>{
       const cursor=usersCollection.find()
@@ -54,6 +57,30 @@ async function run() {
      res.send(result);
  })
 
+   //Subscription
+   app.post('/api/subscriptions',async(req,res)=>{
+    const data=req.body;
+    const subInfo={
+      ...data,
+      createdAt:new Date()
+    }
+    const result=await subscriptionCollection.insertOne(subInfo);
+    
+
+    const filter = { email:data.email };
+    // update the value of the 'quantity' field to 5
+    const updateDocument = {
+      $set: {
+        quantity: 5,
+        plan:data.planId,
+      },
+    };
+   const updateResult= await usersCollection.updateOne(filter,updateDocument);
+   res.send(updateResult)
+   })
+
+
+
    //application related apis
    app.post('/api/application',async(req,res)=>{
    const application=req.body;
@@ -64,6 +91,21 @@ async function run() {
    const result=await applicationCollection.insertOne(newApplication);
    res.send(result);
    })
+
+app.get(`/api/application`,async(req,res)=>{
+  const query={};
+  if(req.query.applicationId){
+    query.applicationId=rq.query.applicationId;
+  }
+  if(req.query.jobId){
+    query.jobId=req.query.jobId;
+  }
+  const cursor=applicationCollection.find(query);
+  const  result=await cursor.toArray();
+  res.send(result);
+
+})
+  
 
  //company related apis
   
@@ -92,6 +134,16 @@ async function run() {
   }
   const result=await companyCollection.findOne(query);
   res.send(result || {})
+ })
+
+ //plans 
+ app.get('/api/plans',async(req,res)=>{
+  const query={}
+  if(req.query.plan_id){
+    query.id=req.query.plan_id
+  }
+  const plan=await planCollection.findOne(query);
+  res.send(plan);
  })
 
  app.get("/api/jobs",async(req,res)=>{
