@@ -108,12 +108,70 @@ app.get(`/api/application`,async(req,res)=>{
   
 
  //company related apis
+  // app.get("/api/companies", async (req, res) => {
+  //   const cursor = companyCollection.find().skip(4);
+  //   const result = await cursor.toArray();
+  //   res.send(result);
+  // });
   
- app.get('/api/companies', async(req,res)=>{
-  const cursor=companyCollection.find().skip(4);
-  const result=await cursor.toArray();
+ //inefficient way to join/aggregate collection
+app.get("/api/companies", async (req, res) => {
+  const cursor = companyCollection.find();
+  const companies = await cursor.toArray();
+
+  for (const company of companies) {
+    const filter = {
+      "company.id": company._id.toString(), // নেস্টেড অবজেক্টের id চেক করার নিয়ম
+    };
+    const jobCount = await jobCollection.countDocuments(filter);
+    company.jobsCount = jobCount;
+  }
+  res.send(companies);
+  });
+
+  // inefficient way to join/aggregate collection
+   app.get('/api/companies2', async (req,res)=>{
+   const pipeline = [
+     {
+       $skip: 5,
+     },
+     {
+       $limit: 2,
+     },
+   ];
+  const cursor=companyCollection.aggregate(pipeline)
+  const result =await cursor.toArray();
   res.send(result)
- })
+  })
+
+   app.get('/api/stats',async(req,res)=>{
+    const pipeline=[
+      {
+        $group:{
+          _id:'$type',
+          count:{
+            $sum:1
+          }
+        }  
+      },
+      {
+
+      $project:{
+        jobType:'$_id',
+        _id:0,
+        count:1
+      }
+      },
+      {
+          $sort:{count: 1}
+        }
+    ]
+    const cursor=jobCollection.aggregate(pipeline);
+    const result=await cursor.toArray();
+    res.send(result)
+
+   })
+
 
  //company related api
  app.post('/api/companies',async(req,res)=>{
@@ -136,6 +194,19 @@ app.get(`/api/application`,async(req,res)=>{
   res.send(result || {})
  })
 
+ app.patch('/api/companies/:id', async(req,res)=>{
+  const id =  req.params.id;
+  const updatedCompany = req.body;
+  const filter={_id:new ObjectId(id)}
+  const updatedDoc={
+    $set:{
+      status:updatedCompany.status
+    }
+  }
+  const result=await companyCollection.updateOne(filter,updatedDoc)
+  res.send(result);
+ })
+
  //plans 
  app.get('/api/plans',async(req,res)=>{
   const query={}
@@ -154,7 +225,7 @@ app.get(`/api/application`,async(req,res)=>{
     if(req.query.status){
         query.status=req.query.status;
     }
-    const cursor=jobCollection.find(query).skip(12);
+    const cursor=jobCollection.find(query);
     const result =await cursor.toArray();
     res.send(result);
 
