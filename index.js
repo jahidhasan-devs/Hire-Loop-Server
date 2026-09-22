@@ -13,6 +13,10 @@ app.get("/", (req, res) => {
 });
 
 
+const logger=(req,res, next)=>{
+  console.log('logger middleware logged',req.params);
+  next();
+}
 
 
 
@@ -39,7 +43,39 @@ async function run() {
      const applicationCollection=database.collection("applications");
      const planCollection=database.collection('plans');
      const subscriptionCollection=database.collection('subscriptions')
+     const sessionCollection=database.collection('session')
 
+     //varification related
+     const verifyToken =async (req, res, next) => {
+       const authHeader = req.headers?.authorization;
+       if (!authHeader) {
+         return res.status(401).send({ message: "unauthorized access" });
+       }
+       const token = authHeader.split(" ")[1];
+       if (!token) {
+         return res.status(401).send({ message: `unauthorized access` });
+       }
+        const query={token:token}
+        const session= await sessionCollection.findOne(query);
+        const userId=session.userId;
+       
+          
+        const userQuery={
+          _id:userId
+        }
+
+        const user=await usersCollection.findOne(userQuery)
+         //set data in the request object
+         req.user=user,
+       next();
+     };
+
+   const verifySeeker=async(req,res,next)=>{
+     if(req?.role !=="seeker"){
+      return res.status(403).send({message: 'forbidden access'})
+     }
+    next();
+   }
 
      app.get('/api/users', async(req,res)=>{
       const cursor=usersCollection.find()
@@ -92,10 +128,16 @@ async function run() {
    res.send(result);
    })
 
-app.get(`/api/application`,async(req,res)=>{
+   
+
+app.get(`/api/application`,verifyToken,verifySeeker,async(req,res)=>{
   const query={};
   if(req.query.applicationId){
     query.applicationId=rq.query.applicationId;
+
+   //check whether asking for user information or someone else 
+    console.log(req.user, req.query.application)
+
   }
   if(req.query.jobId){
     query.jobId=req.query.jobId;
@@ -115,7 +157,7 @@ app.get(`/api/application`,async(req,res)=>{
   // });
   
  //inefficient way to join/aggregate collection
-app.get("/api/companies", async (req, res) => {
+app.get("/api/companies",verifyToken, async (req, res) => {
   const cursor = companyCollection.find();
   const companies = await cursor.toArray();
 
@@ -194,7 +236,7 @@ app.get("/api/companies", async (req, res) => {
   res.send(result || {})
  })
 
- app.patch('/api/companies/:id', async(req,res)=>{
+ app.patch('/api/companies/:id',logger,verifyToken, async(req,res)=>{
   const id =  req.params.id;
   const updatedCompany = req.body;
   const filter={_id:new ObjectId(id)}
